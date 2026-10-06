@@ -93,14 +93,21 @@ function markdown(source, prefix, toc = []) {
 }
 
 function shell({ title, description, content, prefix, page }) {
+  const homeIcon = '<svg class="home-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M11.36 2.23a1 1 0 0 1 1.28 0l9 7.5a1 1 0 0 1-1.28 1.54L20 10.97V21a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1V10.97l-.36.3a1 1 0 0 1-1.28-1.54ZM12 6a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"/><path class="home-chimney" d="M17 2h3v4l-3-2.5Z"/></svg>';
+  const postsIcon = '<svg class="posts-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6.5h14"/><path d="M5 12h14"/><path d="M5 17.5h10"/></svg>';
+  const themeButton = `<button class="rail-link theme-toggle" type="button" data-theme-toggle aria-label="切换到夜间模式" aria-pressed="false"><svg class="moon-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14A8.7 8.7 0 0 1 10 3.5 8.7 8.7 0 1 0 20.5 14Z"/></svg><svg class="sun-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M5 19l1.4-1.4M17.6 6.4 19 5"/></svg><span class="rail-tooltip" aria-hidden="true">切换到夜间模式</span></button>`;
+  const navigation = (mobile = false) => [
+    { label: '首页', href: prefix, icon: homeIcon, current: page === 'home', active: page === 'home' },
+    { label: '文章列表', href: `${prefix}posts/`, icon: postsIcon, current: page === 'index', active: page !== 'home' },
+  ].map(({ label, href, icon, current, active }) => `<a class="rail-link${active ? ' is-active' : ''}" href="${href}" aria-label="${label}"${current ? ' aria-current="page"' : ''}>${icon}<span class="${mobile ? 'mobile-label' : 'rail-tooltip'}"${mobile ? '' : ' aria-hidden="true"'}>${label}</span></a>`).join('');
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light"><meta name="description" content="${escapeHtml(description)}">
-<title>${escapeHtml(title)} · Hero Journey</title><link rel="icon" href="${prefix}assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="${prefix}assets/site.css">${page === 'article' ? `<script src="${prefix}assets/site.js" defer></script>` : ''}</head>
+<meta name="color-scheme" content="light dark"><meta name="description" content="${escapeHtml(description)}">
+<title>${escapeHtml(title)} · Hero Journey</title><link rel="icon" href="${prefix}assets/favicon.svg" type="image/svg+xml"><script src="${prefix}assets/theme.js"></script><link rel="stylesheet" href="${prefix}assets/site.css">${page === 'article' ? `<script src="${prefix}assets/site.js" defer></script>` : ''}</head>
 <body class="${page}"><div class="site-frame">
-<aside class="rail" aria-label="网站导航"><a class="brand" href="${prefix}" aria-label="文章列表">H.</a><a class="rail-link" href="${prefix}" aria-label="文章列表" ${page === 'index' ? 'aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6.5h14M5 12h14M5 17.5h10"/></svg></a></aside>
-<div class="mobile-bar"><a class="mobile-brand" href="${prefix}" aria-label="文章列表">H.</a><a href="${prefix}">文章</a></div>
-<main id="main">${content}</main>
+<aside class="rail" aria-label="网站导航"><a class="brand" href="${prefix}" aria-label="henryDai 首页">henry<span>Dai</span></a><div class="rail-controls"><nav class="rail-nav" aria-label="主导航">${navigation()}</nav>${themeButton}</div></aside>
+<div class="mobile-bar"><a class="mobile-brand" href="${prefix}" aria-label="henryDai 首页">henry<span>Dai</span></a><div class="mobile-controls"><nav class="mobile-nav" aria-label="主导航">${navigation(true)}</nav>${themeButton}</div></div>
+<main id="main"${page === 'home' ? ' aria-label="首页"' : ''}>${content}</main>
 </div></body></html>`;
 }
 
@@ -123,6 +130,7 @@ await mkdir(new URL('assets/', out), { recursive: true });
 await cp(new URL('../photo/', import.meta.url), new URL('photo/', out), { recursive: true });
 await cp(new URL('../assets/site.css', import.meta.url), new URL('assets/site.css', out));
 await cp(new URL('../assets/site.js', import.meta.url), new URL('assets/site.js', out));
+await cp(new URL('../assets/theme.js', import.meta.url), new URL('assets/theme.js', out));
 await cp(new URL('../assets/favicon.svg', import.meta.url), new URL('assets/favicon.svg', out));
 
 const posts = [];
@@ -143,11 +151,11 @@ for (const { name, source, slug, leading } of sources) {
     const numbered = text.match(/^(\d+)\.\s+(.+)$/);
     return `<a href="#${id}" data-toc-link><span class="toc-number">${numbered ? numbered[1].padStart(2, '0') : '—'}</span><span>${escapeHtml(numbered ? numbered[2] : text)}</span></a>`;
   }).join('');
-  const content = `<article class="article-page"><a class="back-link" href="../../"><span aria-hidden="true">←</span> 文章</a>
+  const content = `<article class="article-page"><a class="back-link" href="../"><span aria-hidden="true">←</span> 文章</a>
   <header class="article-header"><h1>${escapeHtml(title)}</h1>${english ? `<p class="article-subtitle">${escapeHtml(english)}</p>` : ''}<p class="article-meta">约 ${reading} 分钟阅读</p></header>
   ${toc.length ? `<details class="toc-mobile"><summary>目录 <span>${toc.length} 节</span></summary><nav aria-label="文章目录">${tocLinks}</nav></details>` : ''}
   <div class="prose">${markdown(body, '../../', toc)}</div>
-  <a class="end-link" href="../../">← 返回文章列表</a></article>
+  <a class="end-link" href="../">← 返回文章列表</a></article>
   ${toc.length ? `<details class="toc-drawer"><summary>目录</summary><nav aria-label="文章目录">${tocLinks}</nav></details><nav class="toc-desktop" aria-label="文章目录"><p class="toc-heading">目录</p><div class="toc-list">${tocLinks}</div></nav>` : ''}`;
   const dir = new URL(`posts/${slug}/`, out);
   await mkdir(dir, { recursive: true });
@@ -155,8 +163,12 @@ for (const { name, source, slug, leading } of sources) {
   posts.push({ slug, title, description, reading, english });
 }
 
-const cards = posts.map((post) => `<a class="post-row" href="./posts/${post.slug}/"><span class="post-info"><span class="post-title">${escapeHtml(post.title)}</span>${post.english ? `<span class="post-subtitle">${escapeHtml(post.english)}</span>` : ''}</span><span class="post-meta">约 ${post.reading} 分钟</span></a>`).join('\n');
-const home = `<div class="index-page"><header class="intro"><p class="intro-label">Writing</p><h1>文章</h1></header>
+const cards = posts.map((post) => `<a class="post-row" href="./${post.slug}/"><span class="post-info"><span class="post-title">${escapeHtml(post.title)}</span>${post.english ? `<span class="post-subtitle">${escapeHtml(post.english)}</span>` : ''}</span><span class="post-meta">约 ${post.reading} 分钟</span></a>`).join('\n');
+const listing = `<div class="index-page"><header class="intro"><p class="intro-label">Writing</p><h1>文章</h1></header>
 <section class="posts-section" aria-label="文章列表"><div class="post-list">${cards || '<p class="empty">暂无文章</p>'}</div></section></div>`;
-await writeFile(new URL('index.html', out), shell({ title: '文章', description: '文章列表', content: home, prefix: './', page: 'index' }));
+await mkdir(new URL('posts/', out), { recursive: true });
+await writeFile(new URL('posts/index.html', out), shell({ title: '文章', description: '文章列表', content: listing, prefix: '../', page: 'index' }));
+// 首页正文暂时留空，后续内容从这里添加。
+const home = '';
+await writeFile(new URL('index.html', out), shell({ title: '首页', description: 'Hero Journey', content: home, prefix: './', page: 'home' }));
 console.log(`Built ${posts.length} article(s) in dist/`);
