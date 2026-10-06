@@ -6,6 +6,39 @@ const out = new URL('../dist/', import.meta.url);
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const slugify = (name) => name.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-').replace(/^-|-$/g, '');
 
+function postMetadata(raw, name) {
+  const normalized = raw.replace(/\r\n/g, '\n');
+  const blocks = [...normalized.matchAll(/<!--\s*post-meta\b([\s\S]*?)-->/g)];
+  const starts = [...normalized.matchAll(/<!--\s*post-meta\b/g)];
+  if (starts.length !== blocks.length || blocks.length > 1) throw new Error(`${name} 的 post-meta 必须是一个完整的注释块`);
+  const metadata = { tags: [] };
+  const seen = new Set();
+  for (const line of (blocks[0]?.[1] || '').split('\n').filter((line) => line.trim())) {
+    const field = line.match(/^\s*(published|updated|tags|summary):\s*(.*?)\s*$/);
+    if (!field) throw new Error(`${name} 的元信息行不受支持：${line}`);
+    const [, key, value] = field;
+    if (seen.has(key)) throw new Error(`${name} 的 ${key} 重复填写`);
+    seen.add(key);
+    if (!value) throw new Error(`${name} 的 ${key} 不能为空；没有信息时请省略该字段`);
+    if (key === 'tags') {
+      metadata.tags = [...new Set(value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean))];
+      if (!metadata.tags.length || metadata.tags.length > 3) throw new Error(`${name} 请填写 1–3 个标签`);
+    } else if (key === 'published' || key === 'updated') {
+      const date = new Date(`${value}T00:00:00Z`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) throw new Error(`${name} 的 ${key} 必须是有效的 YYYY-MM-DD 日期`);
+      metadata[key] = value;
+    } else metadata[key] = value;
+  }
+  if (metadata.published && metadata.updated && metadata.updated < metadata.published) throw new Error(`${name} 的更新日期不能早于发布日期`);
+  return { source: normalized.replace(/<!--\s*post-meta\b[\s\S]*?-->/g, '').trimStart(), metadata };
+}
+
+function metadataHtml(metadata, article = false) {
+  const date = (value) => `<time datetime="${value}">${value.replaceAll('-', '.')}</time>`;
+  const items = [metadata.published ? date(metadata.published) : '', article && metadata.updated && metadata.updated !== metadata.published ? `<span>更新于 ${date(metadata.updated)}</span>` : '', ...metadata.tags.map((tag) => `<span class="post-tag">${escapeHtml(tag)}</span>`)].filter(Boolean);
+  return items.length ? `<${article ? 'div' : 'span'} class="${article ? 'article-meta' : 'post-meta'}">${items.join('')}<${article ? '/div' : '/span'}>` : '';
+}
+
 function inline(source, prefix) {
   const tokens = [];
   let text = escapeHtml(source);
@@ -115,14 +148,14 @@ const names = (await readdir(postsDir)).filter((name) => name.endsWith('.md')).s
 const sources = [];
 const slugs = new Set();
 for (const name of names) {
-  const source = await readFile(new URL(name, postsDir), 'utf8');
+  const { source, metadata } = postMetadata(await readFile(new URL(name, postsDir), 'utf8'), name);
   const slug = slugify(basename(name, '.md'));
   if (!slug || slugs.has(slug)) throw new Error(`文章文件名无法生成唯一网址：${name}`);
   slugs.add(slug);
   const leading = source.replace(/\r\n/g, '\n').trimStart().match(/^#\s+([^\n]+)(?:\n\s*\n#\s+([^\n]+))?/);
   if (!leading) throw new Error(`${name} 缺少开头的一级标题（# 标题）`);
   await validateImages(source, name);
-  sources.push({ name, source, slug, leading });
+  sources.push({ name, source, slug, leading, metadata });
 }
 
 await rm(out, { recursive: true, force: true });
@@ -134,7 +167,7 @@ await cp(new URL('../assets/theme.js', import.meta.url), new URL('assets/theme.j
 await cp(new URL('../assets/favicon.svg', import.meta.url), new URL('assets/favicon.svg', out));
 
 const posts = [];
-for (const { name, source, slug, leading } of sources) {
+for (const { name, source, slug, leading, metadata } of sources) {
   const lines = source.replace(/\r\n/g, '\n').split('\n');
   const firstHeading = leading[1].trim();
   const secondHeading = leading[2]?.trim();
@@ -142,8 +175,7 @@ for (const { name, source, slug, leading } of sources) {
   const title = bilingual ? secondHeading : firstHeading;
   const english = bilingual ? firstHeading : '';
   const firstText = lines.find((line) => line.trim() && !/^(#|>|-|<|\d+\.|\*)/.test(line.trim())) || '';
-  const description = firstText.slice(0, 90);
-  const reading = Math.max(1, Math.ceil(source.replace(/\s/g, '').length / 450));
+  const description = metadata.summary || firstText.slice(0, 90);
   const headingBlock = bilingual ? leading[0] : leading[0].match(/^#\s+[^\n]+/)?.[0];
   const body = source.trimStart().slice(headingBlock.length).trimStart();
   const toc = outline(body);
@@ -152,7 +184,7 @@ for (const { name, source, slug, leading } of sources) {
     return `<a href="#${id}" data-toc-link><span class="toc-number">${numbered ? numbered[1].padStart(2, '0') : '—'}</span><span>${escapeHtml(numbered ? numbered[2] : text)}</span></a>`;
   }).join('');
   const content = `<article class="article-page"><a class="back-link" href="../"><span aria-hidden="true">←</span> 文章</a>
-  <header class="article-header"><h1>${escapeHtml(title)}</h1>${english ? `<p class="article-subtitle">${escapeHtml(english)}</p>` : ''}<p class="article-meta">约 ${reading} 分钟阅读</p></header>
+  <header class="article-header"><h1>${escapeHtml(title)}</h1>${english ? `<p class="article-subtitle">${escapeHtml(english)}</p>` : ''}${metadata.summary ? `<p class="article-summary">${escapeHtml(metadata.summary)}</p>` : ''}${metadataHtml(metadata, true)}</header>
   ${toc.length ? `<details class="toc-mobile"><summary>目录 <span>${toc.length} 节</span></summary><nav aria-label="文章目录">${tocLinks}</nav></details>` : ''}
   <div class="prose">${markdown(body, '../../', toc)}</div>
   <a class="end-link" href="../">← 返回文章列表</a></article>
@@ -160,10 +192,11 @@ for (const { name, source, slug, leading } of sources) {
   const dir = new URL(`posts/${slug}/`, out);
   await mkdir(dir, { recursive: true });
   await writeFile(new URL('index.html', dir), shell({ title, description, content, prefix: '../../', page: 'article' }));
-  posts.push({ slug, title, description, reading, english });
+  posts.push({ slug, title, description, english, metadata });
 }
 
-const cards = posts.map((post) => `<a class="post-row" href="./${post.slug}/"><span class="post-info"><span class="post-title">${escapeHtml(post.title)}</span>${post.english ? `<span class="post-subtitle">${escapeHtml(post.english)}</span>` : ''}</span><span class="post-meta">约 ${post.reading} 分钟</span></a>`).join('\n');
+posts.sort((a, b) => (b.metadata.published || '').localeCompare(a.metadata.published || '') || a.slug.localeCompare(b.slug, 'zh-CN'));
+const cards = posts.map((post) => `<a class="post-row" href="./${post.slug}/"><span class="post-info"><span class="post-title">${escapeHtml(post.title)}</span>${post.english ? `<span class="post-subtitle">${escapeHtml(post.english)}</span>` : ''}${post.description ? `<span class="post-summary">${escapeHtml(post.description)}</span>` : ''}${metadataHtml(post.metadata)}</span></a>`).join('\n');
 const listing = `<div class="index-page"><header class="intro"><p class="intro-label">Writing</p><h1>文章</h1></header>
 <section class="posts-section" aria-label="文章列表"><div class="post-list">${cards || '<p class="empty">暂无文章</p>'}</div></section></div>`;
 await mkdir(new URL('posts/', out), { recursive: true });
