@@ -192,7 +192,7 @@ for (const { name, source, slug, leading, metadata } of sources) {
   const dir = new URL(`posts/${slug}/`, out);
   await mkdir(dir, { recursive: true });
   await writeFile(new URL('index.html', dir), shell({ title, description, content, prefix: '../../', page: 'article' }));
-  posts.push({ slug, title, description, english, metadata });
+  posts.push({ slug, title, description, english, metadata, body });
 }
 
 posts.sort((a, b) => (b.metadata.published || '').localeCompare(a.metadata.published || '') || a.slug.localeCompare(b.slug, 'zh-CN'));
@@ -201,7 +201,19 @@ const listing = `<div class="index-page"><header class="intro"><p class="intro-l
 <section class="posts-section" aria-label="文章列表"><div class="post-list">${cards || '<p class="empty">暂无文章</p>'}</div></section></div>`;
 await mkdir(new URL('posts/', out), { recursive: true });
 await writeFile(new URL('posts/index.html', out), shell({ title: '文章', description: '文章列表', content: listing, prefix: '../', page: 'index' }));
-// 首页正文暂时留空，后续内容从这里添加。
-const home = '';
-await writeFile(new URL('index.html', out), shell({ title: '首页', description: 'Hero Journey', content: home, prefix: './', page: 'home' }));
+// 首页直接渲染同一份公开文章正文，不复制原文或展示列表摘要。
+const life = posts.find((post) => post.slug === '人生规律');
+if (!life) throw new Error('首页需要 content/posts/人生规律.md');
+const home = `<div class="home-page">
+  <div class="life-rhythm">
+    <svg class="rhythm-drawing" viewBox="0 0 880 310" fill="none" role="img" aria-label="起步、上升、平台与跌落，一条反复起伏的曲线">
+      <defs><linearGradient id="rhythm-wash" x1="0" y1="40" x2="0" y2="290" gradientUnits="userSpaceOnUse"><stop stop-color="currentColor" stop-opacity=".15"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs>
+      <path fill="url(#rhythm-wash)" d="M10 216C80 216 111 231 157 206S232 111 330 83S445 51 490 51C526 51 548 53 563 75S580 151 630 207S712 245 770 245V300H10Z"/>
+      <path class="rhythm-line" pathLength="1" d="M10 216C80 216 111 231 157 206S232 111 330 83S445 51 490 51C526 51 548 53 563 75S580 151 630 207S712 245 770 245"/>
+      <path class="rhythm-continuation" d="M770 245C814 245 835 226 870 198"/>
+    </svg>
+  </div>
+  <article class="home-reading" aria-label="人生规律"><div class="prose home-prose">${markdown(life.body, './')}</div></article>
+</div>`;
+await writeFile(new URL('index.html', out), shell({ title: '首页', description: life?.description || 'Hero Journey', content: home, prefix: './', page: 'home' }));
 console.log(`Built ${posts.length} article(s) in dist/`);

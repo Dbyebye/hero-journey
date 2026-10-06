@@ -93,6 +93,27 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--green); outline
 .mobile-bar { display: none; }
 main { margin-left: 78px; min-height: 100vh; }
 
+.home-page { width: min(704px, calc(100% - 96px)); margin: 0 auto; padding: clamp(72px, 12vh, 130px) 0 80px; }
+.life-rhythm { margin: 0 0 40px; color: var(--green); }
+.rhythm-drawing { display: block; width: 100%; height: auto; overflow: visible; }
+.rhythm-line { stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; animation: rhythm-reveal 1.6s ease-out both; }
+.rhythm-continuation { stroke: currentColor; stroke-width: 1.4; stroke-dasharray: 3 7; stroke-linecap: round; opacity: .5; }
+.home-reading { padding: 40px 44px; border-radius: 24px; background: #fff; box-shadow: 0 6px 30px #39352f03; }
+[data-theme="dark"] .home-reading { background: #263129; }
+.home-reading .home-prose { margin: 0; font-size: 17px; font-weight: 400; line-height: 1.9; }
+.home-reading .home-prose p { margin-bottom: 28px; }
+.home-reading .home-prose p:last-child { margin-bottom: 0; }
+.home-reading .home-prose figure { width: 100%; max-width: 100%; margin-left: 0; }
+@keyframes rhythm-reveal { from { stroke-dasharray: 1; stroke-dashoffset: 1; } to { stroke-dasharray: 1; stroke-dashoffset: 0; } }
+@media (max-width: 760px) { .home-page { width: calc(100% - 64px); } }
+@media (max-width: 600px) {
+  .home-page { width: calc(100% - 48px); padding: 58px 0 54px; }
+  .life-rhythm { margin-bottom: 32px; }
+  .rhythm-line { stroke-width: 2.4; }
+  .home-reading { padding: 28px 24px; border-radius: 20px; }
+  .home-reading .home-prose { font-size: 16px; line-height: 1.9; }
+}
+
 .index-page { width: min(576px, calc(100% - 64px)); margin: 0 auto; padding: 154px 0 140px; }
 .intro-label { margin: 0 0 14px; color: var(--muted); font-size: 12px; letter-spacing: .04em; }
 .intro h1 { margin: 0; font: 600 30px/1.4 var(--serif); letter-spacing: -.025em; }
